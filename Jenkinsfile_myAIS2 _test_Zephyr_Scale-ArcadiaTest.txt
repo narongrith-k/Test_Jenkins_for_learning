@@ -111,11 +111,11 @@ pipeline {
                 prepareResultXML()
             }
         }
-        stage('Send Line Notify') {
-            steps {
-                runShellLineNoti()
-            }
-        }
+        // stage('Send Line Notify') {
+        //     steps {
+        //         runShellLineNoti()
+        //     }
+        // }
         stage('Publish Results') {
             steps {
                 publishReportTestCase()
