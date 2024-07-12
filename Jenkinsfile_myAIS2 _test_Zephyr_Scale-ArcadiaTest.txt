@@ -17,7 +17,7 @@ def runRobot() {
         //sh "robot --variable ENV:${ENV} --variable CONFIGNAME:${Config_name} --variable LOGIN:${Login} --variable Language:TH --variable MOBILE:Postpaid --variable OS:iOS --nostatusrc -e exclude -d ./result TestScript/Mobile/${folder}/${TestSuite}"
     } else {
         bat """
-        robot -x "junitresult.xml" -d "Result" robot_learning_01.robot """
+        robot -x "junitresult.xml" -d ".\\result\\${OUTPUT_FOLDER_NAME}" robot_learning_01.robot """
     }
 }
     // robot --variable CONFIGNAME:ArcadiaJenkinsTest --variable Language:EN -x "junitresult.xml" --nostatusrc -e OnHold -e Fixing -e MainFlowCPIRLPDatabase -e MainFlowCPERLPDatabase -d ".\\result\\${OUTPUT_FOLDER_NAME}" "TestScript\\Pre_test\\Domain_Package\\Buy_Ontop_Package.robot"
