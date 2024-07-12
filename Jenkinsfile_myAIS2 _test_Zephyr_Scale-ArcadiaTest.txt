@@ -1,0 +1,146 @@
+import java.text.SimpleDateFormat
+import java.util.TimeZone
+
+class logDateTime {
+    static String getCurrentDate() {
+        Date date = new Date()
+        SimpleDateFormat dateFormat = new SimpleDateFormat('yyyyMMdd-HHmm')
+        dateFormat.setTimeZone(TimeZone.getTimeZone('GMT+07:00'))
+        return dateFormat.format(date)
+    }
+}
+
+def currentDate = logDateTime.getCurrentDate()
+
+def runRobot() {
+    if (isUnix()) {
+        //sh "robot --variable ENV:${ENV} --variable CONFIGNAME:${Config_name} --variable LOGIN:${Login} --variable Language:TH --variable MOBILE:Postpaid --variable OS:iOS --nostatusrc -e exclude -d ./result TestScript/Mobile/${folder}/${TestSuite}"
+    } else {
+        bat """
+        robot -x "junitresult.xml" -d "Result" robot_learning_01.robot """
+    }
+}
+    // robot --variable CONFIGNAME:ArcadiaJenkinsTest --variable Language:EN -x "junitresult.xml" --nostatusrc -e OnHold -e Fixing -e MainFlowCPIRLPDatabase -e MainFlowCPERLPDatabase -d ".\\result\\${OUTPUT_FOLDER_NAME}" "TestScript\\Pre_test\\Domain_Package\\Buy_Ontop_Package.robot"
+
+def publishReportTestCase() { 
+    step([$class: 'RobotPublisher', 
+        outputPath: '\\result\\${OUTPUT_FOLDER_NAME}\\', 
+        outputFileName: '**\\output.xml',
+        reportFileName: '**\\report.html',
+        logFileName: '**\\log.html', 
+        onlyCritical: false
+    ]) 
+
+    emailext body: '${SCRIPT, template="robot.groovy"}', 
+        subject: '[myAIS_2.0] $PROJECT_NAME', 
+        to: 'narongrith.wk@gmail.com' 
+}
+
+def runShellLineNoti() {
+    if (isUnix()) {
+        sh "chmod 755 ${workspace}/send_line_notify_automate_report.sh"
+        sh "${workspace}/send_line_notify_automate_report.sh"
+    } else {
+        bat "send_line_notify_automate_report.sh"
+    }
+}
+
+def prepareResultXML() {
+    script {
+        bat """
+        if exist .\\result\\*.xml (
+            del /F /Q .\\result\\*.xml
+        )
+        copy /Y .\\result\\${OUTPUT_FOLDER_NAME}\\*.xml .\\result\\
+        if exist .\\result\\*.xml (
+            echo "file *.xml copy succeeded"
+        ) else (
+            copy /Y .\\result\\${OUTPUT_FOLDER_NAME}\\*.xml .\\result\\
+            if exist .\\result\\*.xml (
+                echo "file *.xml copy succeeded after retry"
+            ) else (
+                echo "Failed to copy *.xml files"
+                exit /b 1
+            )
+        )
+        """
+    }
+}
+
+def cleanOldFolders() {
+    script {
+        powershell '''
+        $folders = Get-ChildItem -Path .\\result -Directory | Where-Object { $_.Name -like "Result-*" } | Sort-Object CreationTime
+        $folderCount = $folders.Count
+        echo "Total folders found: $folderCount"
+        if ($folderCount -gt 15) {
+            $foldersToDelete = $folders[0..($folderCount - 16)]
+            foreach ($folder in $foldersToDelete) {
+                Remove-Item -Path $folder.FullName -Recurse -Force
+                echo "Deleted folder: $($folder.FullName)"
+            }
+        }
+        echo "Folder count is not greater than 15."
+        '''
+    }
+}
+
+pipeline {
+    agent any
+    options { timestamps() }
+    environment {
+        CURRENT_DATE = "${currentDate}"
+        WORKSPACE_DIR = "${env.WORKSPACE}"
+        RESULT_FOLDER_PATH = ".\\result"
+        OUTPUT_FOLDER_NAME = "Result-${currentDate}"
+    }
+    stages {
+        stage('Check Directory') {
+            steps {
+                echo "Workspace directory is ${workspace}"
+                echo "Output directory is ${RESULT_FOLDER_PATH}\\${OUTPUT_FOLDER_NAME}"
+            }
+        }
+        stage('Run Test Suite') {
+            steps {
+                runRobot()
+            }
+        }
+        stage('Prepare Robot Result') {
+            steps {
+                prepareResultXML()
+            }
+        }
+        stage('Send Line Notify') {
+            steps {
+                runShellLineNoti()
+            }
+        }
+        stage('Publish Results') {
+            steps {
+                publishReportTestCase()
+            }
+        }
+        stage('Clean Old Folders') {
+            steps {
+                cleanOldFolders()
+            }
+        }
+    }
+    post {
+        always {
+            publishTestResults serverAddress: 'https://mimotech.atlassian.net',
+                projectKey: 'MYAIS2X',
+                format: 'JUnit XML Result File',
+                filePath: 'result/junitresult.xml',
+                autoCreateTestCases: false,
+                customTestCycle: [
+                    name: '$PROJECT_NAME',
+                    description: 'Test Description',
+                    jiraProjectVersion: '',
+                    folderId: '',
+                    customFields: ''
+                ]
+        }
+    }
+}
